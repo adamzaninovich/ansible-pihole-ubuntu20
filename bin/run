@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "${SUDOPASS:-0}" == "1" ]]; then
-  ansible-playbook -i inventory.ini -e @secrets_file.enc --vault-password-file password_file main.yml -K
-else
-  ansible-playbook -i inventory.ini -e @secrets_file.enc --vault-password-file password_file main.yml
-fi
+ansible-playbook -i inventory.ini main.yml
