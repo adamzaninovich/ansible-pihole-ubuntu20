@@ -1,6 +1,7 @@
 ---
 - name: Setup
-  hosts: all
+  hosts: localhost
+  connection: local
   become: yes
   tasks:
   - name: Set sudo NOPASSWD

@@ -1,6 +1,7 @@
 ---
 - name: Setup and maintain pihole
-  hosts: all
+  hosts: pihole
+  connection: local
   become: yes
   tasks:
   - name: Update apt repo and cache
@@ -120,7 +121,8 @@
       state: reloaded
 
 - name: Docker Setup
-  hosts: all
+  hosts: pihole
+  connection: local
   become: yes
   vars:
     docker_compose_version: "1.29.2"
@@ -157,7 +159,8 @@
     when: docker_compose.stat.exists
 
 - name: PiHole on Docker Setup
-  hosts: all
+  hosts: pihole
+  connection: local
   become: no
   tasks:
   - name: Install docker-compose manifest for pi-hole
