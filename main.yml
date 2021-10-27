@@ -172,6 +172,7 @@
       dest: ~/docker/docker-compose.yml
       src: docker/docker-compose.yml
   - name: Start PiHole
+    become: yes
     shell:
       cmd: "docker-compose -f docker-compose.yml up -d"
-      chdir: ~/docker
+      chdir: /home/{{ ansible_user }}/docker
