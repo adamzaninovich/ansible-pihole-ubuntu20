@@ -163,6 +163,10 @@
   connection: local
   become: no
   tasks:
+  - name: Create docker directory
+    file:
+      path: ~/docker
+      state: directory
   - name: Install docker-compose manifest for pi-hole
     copy:
       dest: ~/docker/docker-compose.yml
