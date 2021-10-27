@@ -85,7 +85,6 @@
       backup: yes
   - name: Generate /etc/ssh/ RSA host key
     become: no
-    command: ssh-keygen -f ~/.ssh/id_rsa -N ""
     command: ssh-keygen -a 100 -t ed25519 -f ~/.ssh/id_ed25519 -N "" -C "{{ ansible_user }}@{{ ansible_hostname }}"
     args:
       creates: ~/.ssh/id_ed25519
