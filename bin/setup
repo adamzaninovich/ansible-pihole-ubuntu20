@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+sudo apt update
+sudo apt upgrade -y
+sudo apt install ansible -y
+ansible-playbook -i inventory.ini setup.yml -K

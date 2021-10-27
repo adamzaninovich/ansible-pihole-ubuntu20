@@ -1,0 +1,171 @@
+---
+- name: Setup and maintain pihole
+  hosts: all
+  become: yes
+  tasks:
+  - name: Update apt repo and cache
+    apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+  - name: Upgrade all packages
+    apt: upgrade=dist force_apt_get=yes
+  - name: Install packages
+    package:
+      name:
+      - apt-transport-https
+      - ca-certificates
+      - software-properties-common
+      - net-tools
+      - neovim
+      - ufw
+      - curl
+      state: present
+  - name: Remove cloud-init package
+    package:
+      name:
+      - cloud-init
+      state: absent
+  - name: Remove cloud-init files
+    file:
+      path: "{{ item }}"
+      state: absent
+    with_items:
+    - /etc/cloud
+    - /var/lib/cloud
+  - name: Clean up packages
+    apt:
+      autoremove: yes
+      purge: yes
+  - name: Check if a reboot is needed
+    register: reboot_required_file
+    stat: path=/var/run/reboot-required get_md5=no
+  - name: Hush Login
+    become: no
+    copy:
+      content: ""
+      dest: ~/.hushlogin
+      force: no
+      group: "{{ ansible_user }}"
+      owner: "{{ ansible_user }}"
+      mode: 0664
+  - name: Set a blank message of the day
+    copy:
+      dest: /etc/motd
+      src: etc/motd
+      owner: root
+      group: root
+      mode: 0644
+      backup: yes
+  - name: Set a login banner
+    copy:
+      dest: "{{ item }}"
+      src: etc/issue
+      owner: root
+      group: root
+      mode: 0644
+      backup: yes
+    with_items:
+    - /etc/issue
+    - /etc/issue.net
+  - name: Update SSH Config
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: '^Banner /etc/issue'
+      insertafter: '^#Banner none'
+      line: 'Banner /etc/issue'
+      backup: yes
+    notify:
+    - Reload SSH
+  - name: Set SSH Authorized Keys
+    become: no
+    copy:
+      dest: ~/.ssh/authorized_keys
+      src: ssh/authorized_keys
+      owner: "{{ ansible_user }}"
+      group: "{{ ansible_user }}"
+      mode: 0600
+      backup: yes
+  - name: Generate /etc/ssh/ RSA host key
+    become: no
+    command: ssh-keygen -f ~/.ssh/id_rsa -N ""
+    command: ssh-keygen -a 100 -t ed25519 -f ~/.ssh/id_ed25519 -N "" -C "{{ ansible_user }}@{{ ansible_hostname }}"
+    args:
+      creates: ~/.ssh/id_ed25519
+  - name: Firewall - Allow SSH
+    ufw:
+      rule: allow
+      name: OpenSSH
+  - name: Firewall - Allow all access from RFC1918 networks to this host
+    ufw:
+      rule: allow
+      src: '{{ item }}'
+    with_items:
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+  - name: Firewall - Enable
+    ufw:
+      state: enabled
+      logging: on
+  - name: Reboot after kernel update
+    reboot:
+      msg: "Reboot initiated by Ansible for kernel updates"
+      connect_timeout: 5
+      reboot_timeout: 300
+      pre_reboot_delay: 0
+      post_reboot_delay: 30
+      test_command: uptime
+    when: reboot_required_file.stat.exists
+  handlers:
+  - name: Reload SSH
+    service:
+      name: sshd
+      state: reloaded
+
+- name: Docker Setup
+  hosts: all
+  become: yes
+  vars:
+    docker_compose_version: "1.29.2"
+  tasks:
+  - name: Add Docker GPG apt Key
+    apt_key:
+      url: https://download.docker.com/linux/ubuntu/gpg
+      state: present
+  - name: Add Docker Repository
+    apt_repository:
+      repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
+      state: present
+  - name: Update apt repo and cache
+    apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+  - name: Install packages
+    package:
+      name: docker-ce
+      state: present
+  - name: Add user to docker group
+    user:
+      name: "{{ ansible_user }}"
+      groups: docker
+      append: yes
+  - name: Download docker-compose {{ docker_compose_version }}
+    get_url:
+      url : https://github.com/docker/compose/releases/download/{{ docker_compose_version }}/docker-compose-Linux-x86_64
+      dest: ~/docker-compose
+      mode: '+x'
+  - name: Check docker-compose exists
+    stat: path=~/docker-compose
+    register: docker_compose
+  - name: Move docker-compose to /usr/local/bin/docker-compose
+    command: mv ~/docker-compose /usr/local/bin/docker-compose
+    when: docker_compose.stat.exists
+
+- name: PiHole on Docker Setup
+  hosts: all
+  become: no
+  tasks:
+  - name: Install docker-compose manifest for pi-hole
+    copy:
+      dest: ~/docker/docker-compose.yml
+      src: docker/docker-compose.yml
+  - name: Start PiHole
+    shell:
+      cmd: "docker-compose -f docker-compose.yml up -d"
+      chdir: ~/docker
